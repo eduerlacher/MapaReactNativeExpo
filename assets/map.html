@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.2.4/ol.css" />
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js"></script>
+  <script>
+    const map = new ol.Map({
+      target: 'map',
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.OSM()
+        })
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([-46.6333, -23.5505]),zoom: 12})
+    });
+    const vectorSource = new ol.source.Vector();
+    const vectorLayer = new ol.layer.Vector({ source: vectorSource });
+    map.addLayer(vectorLayer);
+    map.once('rendercomplete', function () {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
+    });
+    map.on('click', function (evt) {
+      const coord = ol.proj.toLonLat(evt.coordinate);
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'MAP_CLICK',
+        lon: coord[0],
+        lat: coord[1]
+      }));
+    });
+    document.addEventListener('message', function (event) {
+      handleRNMessage(event.data);
+    });
+    window.addEventListener('message', function (event) {
+      handleRNMessage(event.data);
+    });
+
+    function handleRNMessage(data) {
+      try {
+        const msg = JSON.parse(data);
+
+        if (msg.type === 'SET_USER_LOCATION') {
+          const coord = ol.proj.fromLonLat([msg.lon, msg.lat]);
+
+          vectorSource.clear();
+          const userFeature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+          userFeature.setStyle(new ol.style.Style({
+            image: new ol.style.Circle({
+              radius: 8,
+              fill: new ol.style.Fill({ color: '#378ADD' }),
+              stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+            })
+          }));
+          vectorSource.addFeature(userFeature);
+
+          map.getView().setCenter(coord);
+          map.getView().setZoom(15);
+        }
+      } catch (e) {}
+    }
+  </script>
+</body>
+</html>
