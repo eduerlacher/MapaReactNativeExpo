@@ -6,6 +6,14 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Permitir Localização"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
     "name": "projeto",
@@ -18,9 +26,6 @@
       "supportsTablet": true
     },
     "android": {
-      "android": {
-        "usesCleartextTraffic": true
-      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

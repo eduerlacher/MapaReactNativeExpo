@@ -13,13 +13,14 @@
   <script>
     const map = new ol.Map({
       target: 'map',
+      controls: [],
       layers: [
         new ol.layer.Tile({
           source: new ol.source.OSM()
         })
       ],
       view: new ol.View({
-        center: ol.proj.fromLonLat([-46.6333, -23.5505]),zoom: 12})
+        center: ol.proj.fromLonLat([-40.3324031, -20.2845915]),zoom: 9})
     });
     const vectorSource = new ol.source.Vector();
     const vectorLayer = new ol.layer.Vector({ source: vectorSource });
@@ -29,6 +30,21 @@
     });
     map.on('click', function (evt) {
       const coord = ol.proj.toLonLat(evt.coordinate);
+      const clickedFeature = map.forEachFeatureAtPixel(evt.pixel, feature => feature);
+
+      if (clickedFeature && clickedFeature.get('kind') === 'pin') {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PIN_CLICK',
+          pin: {
+            id: clickedFeature.getId(),
+            title: clickedFeature.get('title'),
+            latitude: coord[1],
+            longitude: coord[0],
+          }
+        }));
+        return;
+      }
+
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'MAP_CLICK',
         lon: coord[0],
@@ -49,8 +65,13 @@
         if (msg.type === 'SET_USER_LOCATION') {
           const coord = ol.proj.fromLonLat([msg.lon, msg.lat]);
 
-          vectorSource.clear();
+          const oldUserFeature = vectorSource.getFeatureById('user-location');
+          if (oldUserFeature) {
+            vectorSource.removeFeature(oldUserFeature);
+          }
+
           const userFeature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+          userFeature.setId('user-location');
           userFeature.setStyle(new ol.style.Style({
             image: new ol.style.Circle({
               radius: 8,
@@ -62,6 +83,36 @@
 
           map.getView().setCenter(coord);
           map.getView().setZoom(15);
+        }
+
+        if (msg.type === 'SET_PINS') {
+          vectorSource.getFeatures()
+            .filter(feature => feature.get('kind') === 'pin')
+            .forEach(feature => vectorSource.removeFeature(feature));
+
+          msg.pins.forEach(pin => {
+            const feature = new ol.Feature({
+              geometry: new ol.geom.Point(
+                ol.proj.fromLonLat([pin.longitude, pin.latitude])
+              ),
+              kind: 'pin',
+              title: pin.title,
+            });
+            feature.setId(pin.id);
+            const pinColor = pin.id.startsWith('upa-')
+              ? '#D32F2F'
+              : pin.id.startsWith('ubs-')
+                ? '#2E7D32'
+                : '#E4572E';
+            feature.setStyle(new ol.style.Style({
+              image: new ol.style.Circle({
+                radius: 7,
+                fill: new ol.style.Fill({ color: pinColor }),
+                stroke: new ol.style.Stroke({ color: '#fff', width: 2 }),
+              }),
+            }));
+            vectorSource.addFeature(feature);
+          });
         }
       } catch (e) {}
     }
