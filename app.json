@@ -14,7 +14,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "name": "projeto",
     "slug": "projeto",

@@ -1,11 +1,13 @@
+import type { Location } from '../dominio/interfaces';
+
 /*
 Template de uma localização com os dados usados pelo projeto:
 {
   id: 'ubs-0',
-  latitude: -20.0000000,
-  longitude: -40.0000000,
+    lat: -20.0000000,
+    long: -40.0000000,
   title: 'Nome da unidade',
-  telefone: '(27) 0000-0000',
+    phone: '(27) 0000-0000',
   address: {
     street: 'Nome da rua',
     number: '100',
@@ -26,13 +28,13 @@ Template de uma localização com os dados usados pelo projeto:
 },
 */
 
-export const localizacoes = [
+export const locations: Location[] = [
     {
         id: 'upa-1',
-        latitude: -20.2845915,
-        longitude: -40.3324031,
+        lat: -20.2845915,
+        long: -40.3324031,
         title: 'Pronto Atendimento de São Pedro',
-        telefone: '(27) 3132-4930',
+        phone: '(27) 3132-4930',
         address: {
             street: 'Rodovia Serafim Derenzi',
             number: '4489',
@@ -41,14 +43,14 @@ export const localizacoes = [
             state: 'ES',
             zipCode: '29031-847',
         },
-            openingHours: '24/7',
+        openingHours: '24/7',
     },
     {
         id: 'upa-2',
-        latitude: -20.3145658,
-        longitude: -40.299332,
+        lat: -20.3145658,
+        long: -40.299332,
         title: 'Pronto Atendimento da Praia do Suá',
-        telefone: '(27) 3137-2764',
+        phone: '(27) 3137-2764',
         address: {
             street: 'Rua Almirante Barroso',
             number: '16',
@@ -57,14 +59,14 @@ export const localizacoes = [
             state: 'ES',
             zipCode: '29052-190',
         },
-            openingHours: '24/7',
+        openingHours: '24/7',
     },
     {
         id: 'ubs-1',
-        latitude: -20.3128059,
-        longitude: -40.3186001,
+        lat: -20.3128059,
+        long: -40.3186001,
         title: 'Unidade de Saúde - Ilha de Santa Maria',
-        telefone: '(27) 3132-5090',
+        phone: '(27) 3132-5090',
         address: {
             street: 'Rua João Bastos Viêira',
             number: '282',
@@ -85,10 +87,10 @@ export const localizacoes = [
     },
     {
         id: 'ubs-2',
-        latitude: -20.308188,
-        longitude: -40.351438,
+        lat: -20.308188,
+        long: -40.351438,
         title: 'Unidade de Saúde - Santo Antônio - Júlio Cézar Prates Mattos',
-        telefone: '(27) 3132-5096 e (27) 3132-5098',
+        phone: '(27) 3132-5096 e (27) 3132-5098',
         address: {
             street: 'Rua Ernesto Bassini',
             number: '165',
@@ -109,10 +111,10 @@ export const localizacoes = [
     },
     {
         id: 'ubs-3',
-        latitude: -20.3052694,
-        longitude: -40.3235986,
+        lat: -20.3052694,
+        long: -40.3235986,
         title: 'Unidade De Saúde De Maruipe',
-        telefone: '(27) 3382-6738',
+        phone: '(27) 3382-6738',
         address: {
             street: 'Rua Victor Fritoli Navarro',
             number: '20',

@@ -1,115 +1,141 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Linking, Modal, Pressable, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Modal, Pressable, StatusBar as NativeStatusBar } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewMessageEvent, WebViewSource } from 'react-native-webview/lib/WebViewTypes';
 import * as Location from 'expo-location';
+import { Asset } from 'expo-asset';
 import { StatusBar } from 'expo-status-bar';
 import mapHtml from '../assets/map.html';
-import { localizacoes } from '../dados/localizacoes';
+import { locations } from '../dados/locations';
+import type { Coordinates, Location as LocationData, NavigationApp } from '../dominio/interfaces';
+import { AvailabilityService } from '../servicos/disponibilidade';
+import { AppNavigationService } from '../servicos/navegacao';
+
+type MapMessage =
+  | { type: 'MAP_READY' }
+  | { type: 'MAP_CLICK'; lat: number; long: number }
+  | { type: 'PIN_CLICK'; pin: { id: string } };
+
+const availabilityService = new AvailabilityService();
+const navigationService = new AppNavigationService();
 
 export default function MapScreen() {
-  //tem usar useState pra alterar isso
-  const webviewRef = useRef(null);
-  const pins = localizacoes;
-  const [location, setLocation] = useState(null);
-  const [errorMsg, setErrorMsg] = useState(null);
+  const webviewRef = useRef<WebView>(null);
+  const pins = locations;
+  const [location, setLocation] = useState<Coordinates | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
-  const [selectedPin, setSelectedPin] = useState(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapHtmlContent, setMapHtmlContent] = useState<string | null>(null);
+  const [selectedPin, setSelectedPin] = useState<LocationData | null>(null);
   const [routeOptionsVisible, setRouteOptionsVisible] = useState(false);
 
-  const getAvailability = (openingHours) => {
-    if (openingHours === '24/7') {
-      return 'Aberto 24 horas';
-    }
+  const getAvailability = (openingHours: LocationData['openingHours']): string =>
+    availabilityService.getStatus(openingHours);
 
-    const dayNames = [
-      'sunday',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-    ];
-    const todayHours = openingHours?.[dayNames[new Date().getDay()]];
-
-    if (!todayHours) {
-      return 'Fechado hoje';
-    }
-
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const [openHour, openMinute] = todayHours.open.split(':').map(Number);
-    const [closeHour, closeMinute] = todayHours.close.split(':').map(Number);
-    const openingMinutes = openHour * 60 + openMinute;
-    const closingMinutes = closeHour * 60 + closeMinute;
-
-    if (currentMinutes >= openingMinutes && currentMinutes <= closingMinutes) {
-      return `Aberto agora, até ${todayHours.close}`;
-    }
-
-    return `Fechado agora, funciona até ${todayHours.close}`;
-  };
-
-  const openNavigationApp = async (app) => {
+  const openNavigationApp = async (app: NavigationApp): Promise<void> => {
     if (!selectedPin) {
       return;
     }
 
-    const destination = `${selectedPin.latitude},${selectedPin.longitude}`;
-    const origin = location
-      ? `${location.latitude},${location.longitude}`
-      : null;
-    let url;
-
-    if (app === 'google-maps') {
-      const originQuery = origin ? `&origin=${encodeURIComponent(origin)}` : '';
-      url = `https://www.google.com/maps/dir/?api=1${originQuery}&destination=${encodeURIComponent(destination)}`;
-    }
-
-    if (app === 'waze') {
-      url = `https://waze.com/ul?ll=${encodeURIComponent(destination)}&navigate=yes`;
-    }
-
-    if (app === 'uber') {
-      if (!origin) {
-        setRouteOptionsVisible(false);
-        alert('A localização atual é necessária para abrir uma rota no Uber.');
-        return;
-      }
-
-      url = `uber://?action=setPickup&pickup[latitude]=${location.latitude}&pickup[longitude]=${location.longitude}&dropoff[latitude]=${selectedPin.latitude}&dropoff[longitude]=${selectedPin.longitude}`;
-    }
-
     try {
-      await Linking.openURL(url);
+      await navigationService.openRoute(app, selectedPin, location);
       setRouteOptionsVisible(false);
     } catch (error) {
       console.warn(`Não foi possível abrir ${app}:`, error);
-      alert(`O aplicativo ${app} não está instalado ou não pode abrir esta rota.`);
+      if (error instanceof Error && error.message === 'LOCATION_REQUIRED_FOR_UBER') {
+        setRouteOptionsVisible(false);
+        alert('A localização atual é necessária para abrir uma rota no Uber.');
+      } else {
+        alert(`O aplicativo ${app} não está instalado ou não pode abrir esta rota.`);
+      }
     }
   };
 
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const asset = await Asset.fromModule(mapHtml).downloadAsync();
+        if (!asset.localUri) {
+          throw new Error('MAP_HTML_URI_UNAVAILABLE');
+        }
+
+        const response = await fetch(asset.localUri);
+        if (!response.ok) {
+          throw new Error(`MAP_HTML_READ_FAILED_${response.status}`);
+        }
+
+        const html = await response.text();
+        if (!cancelled) {
+          setMapHtmlContent(html);
+        }
+      } catch (error) {
+        console.warn('Não foi possível carregar o HTML do mapa:', error);
+        if (!cancelled) {
+          setMapError('Não foi possível carregar o mapa.');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setErrorMsg('Permissão de localização negada');
+          if (!cancelled) {
+            setErrorMsg('Permissão de localização negada. Ative-a nas configurações do Android.');
+          }
           return;
         }
 
-        const pos = await Location.getCurrentPositionAsync({
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+          if (!cancelled) {
+            setErrorMsg('O serviço de localização está desativado. Ative o GPS e tente novamente.');
+          }
+          return;
+        }
+
+        const timeout: Promise<never> = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('LOCATION_TIMEOUT')), 15000);
+        });
+        const position = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
-        setLocation(pos.coords);
+        const pos = await Promise.race([position, timeout]);
+
+        if (!cancelled) {
+          setLocation({ lat: pos.coords.latitude, long: pos.coords.longitude });
+        }
       } catch (error) {
         console.warn('Não foi possível obter a localização:', error);
-        setErrorMsg('Não foi possível obter sua localização. Verifique se o GPS está ativado.');
+        if (!cancelled) {
+          setErrorMsg(
+            error instanceof Error && error.message === 'LOCATION_TIMEOUT'
+              ? 'A localização demorou demais. Verifique o GPS e tente novamente.'
+              : 'Não foi possível obter sua localização. Verifique o GPS e as permissões do Android.'
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Manda a localização pro mapa assim que ELE avisar que carregou
@@ -129,38 +155,61 @@ export default function MapScreen() {
   }, [mapReady]);
 
   const sendLocationToMap = () => {
+    if (!location) {
+      return;
+    }
+
     const msg = JSON.stringify({
       type: 'SET_USER_LOCATION',
-      lat: location.latitude,
-      lon: location.longitude,
+      lat: location.lat,
+      long: location.long,
     });
     webviewRef.current?.postMessage(msg);
   };
 
-  const handleWebViewMessage = (event) => {
+  const handleWebViewMessage = (event: WebViewMessageEvent) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
+      const data = JSON.parse(event.nativeEvent.data) as MapMessage;
       if (data.type === 'MAP_READY') {
         setMapReady(true);
       }
       if (data.type === 'MAP_CLICK') {
-        console.log('Clicou em:', data.lat, data.lon);
+        console.log('Clicou em:', data.lat, data.long);
       }
       if (data.type === 'PIN_CLICK') {
-        const location = localizacoes.find(item => item.id === data.pin.id);
+        const location = locations.find(item => item.id === data.pin.id);
         if (location) {
           setSelectedPin(location);
         }
       }
-    } catch (e) {
-      console.warn('Erro ao processar mensagem do mapa:', e);
+    } catch (error) {
+      console.warn('Erro ao processar mensagem do mapa:', error);
     }
   };
+
+  const handleMapError = (event: WebViewErrorEvent) => {
+    const description = event.nativeEvent.description || 'Não foi possível carregar o mapa.';
+    console.warn('Erro ao carregar o mapa:', description);
+    setMapError('Não foi possível carregar o mapa. Verifique sua conexão com a internet.');
+  };
+
+  const handleMapHttpError = (event: WebViewHttpErrorEvent) => {
+    const { statusCode, description } = event.nativeEvent;
+    console.warn(`Erro HTTP do mapa (${statusCode}):`, description);
+    setMapError(`O mapa retornou um erro de rede (${statusCode}). Verifique sua conexão.`);
+  };
+
+  const reloadMap = () => {
+    setMapError(null);
+    setMapReady(false);
+    webviewRef.current?.reload();
+  };
+
   // mensagem de carregamento
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar style="light" backgroundColor="#1976D2" />
+        <StatusBar style="light" />
         <View style={styles.center}>
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Buscando sua localização...</Text>
@@ -172,7 +221,7 @@ export default function MapScreen() {
   if (errorMsg) {
     return (
       <View style={styles.screen}>
-        <StatusBar style="light" backgroundColor="#1976D2" />
+        <StatusBar style="light" />
         <View style={styles.center}>
           <Text>{errorMsg}</Text>
         </View>
@@ -183,41 +232,53 @@ export default function MapScreen() {
   // ver o mapa, basicamente
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" backgroundColor="#1976D2" />
+      <StatusBar style="light" />
       <View style={styles.mapContainer}>
         <WebView
           ref={webviewRef}
           originWhitelist={['*']}
-          source={mapHtml}
+          source={mapHtmlContent ? { html: mapHtmlContent, baseUrl: 'https://localhost/' } : { html: '' }}
           style={styles.webview}
           onMessage={handleWebViewMessage}
+          onError={handleMapError}
+          onHttpError={handleMapHttpError}
+          onLoadStart={() => setMapError(null)}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           androidLayerType="software"
         />
 
+        {mapError && (
+          <View style={styles.mapErrorOverlay}>
+            <Text style={styles.mapErrorText}>{mapError}</Text>
+            <Pressable style={styles.reloadButton} onPress={reloadMap}>
+              <Text style={styles.reloadButtonText}>Tentar novamente</Text>
+            </Pressable>
+          </View>
+        )}
+
         {selectedPin && (
           <View style={styles.detailsOverlay}>
-            <Text style={styles.detailsTitle}>{selectedPin.title}</Text>
+            <Text selectable style={styles.detailsTitle}>{selectedPin.title}</Text>
             <View style={styles.detailsSection}>
               <Text style={styles.detailsLabel}>Endereço</Text>
-              <Text style={styles.detailsValue}>
+              <Text selectable style={styles.detailsValue}>
                 {selectedPin.address.street}, {selectedPin.address.number}
               </Text>
-              <Text style={styles.detailsValue}>
+              <Text selectable style={styles.detailsValue}>
                 {selectedPin.address.neighborhood} - {selectedPin.address.city}/{selectedPin.address.state}
               </Text>
-              <Text style={styles.detailsValue}>
+              <Text selectable style={styles.detailsValue}>
                 CEP: {selectedPin.address.zipCode}
               </Text>
             </View>
             <View style={styles.detailsSection}>
               <Text style={styles.detailsLabel}>Telefone</Text>
-              <Text style={styles.detailsValue}>{selectedPin.telefone}</Text>
+              <Text selectable style={styles.detailsValue}>{selectedPin.phone}</Text>
             </View>
             <View style={styles.detailsSection}>
               <Text style={styles.detailsLabel}>Disponibilidade</Text>
-              <Text style={styles.detailsValue}>
+              <Text selectable style={styles.detailsValue}>
                 {getAvailability(selectedPin.openingHours)}
               </Text>
             </View>
@@ -284,6 +345,30 @@ const styles = StyleSheet.create({
   mapContainer: { flex: 1 },
   webview: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  mapErrorOverlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F5F7FA',
+  },
+  mapErrorText: {
+    color: '#243B53',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  reloadButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 6,
+    backgroundColor: '#1976D2',
+  },
+  reloadButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   loadingText: { color: '#FFFFFF' },
   detailsOverlay: {
     position: 'absolute',
