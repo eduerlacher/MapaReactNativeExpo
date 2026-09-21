@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewMessageEvent, WebViewSource } from 'react-native-webview/lib/WebViewTypes';
 import * as Location from 'expo-location';
 import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system/legacy';
 import { StatusBar } from 'expo-status-bar';
 import mapHtml from '../assets/map.html';
 import { locations } from '../dados/locations';
@@ -94,14 +95,10 @@ export default function MapScreen() {
           throw new Error('MAP_HTML_URI_UNAVAILABLE');
         }
 
-        // Faz uma requisição fetch para obter o conteúdo do HTML do mapa.
-        const response = await fetch(asset.localUri);
-        if (!response.ok) {
-          throw new Error(`MAP_HTML_READ_FAILED_${response.status}`);
-        }
+        // Lê diretamente o arquivo local; fetch pode retornar 404 para file:// no Android.
+        const html = await FileSystem.readAsStringAsync(asset.localUri);
 
-        // Lê o conteúdo do HTML como texto e atualiza o estado se não houver cancelamento.
-        const html = await response.text();
+        // Atualiza o estado se não houver cancelamento.
         if (!cancelled) {
           setMapHtmlContent(html);
         }
