@@ -17,9 +17,9 @@
       ],
       "expo-asset"
     ],
-    "name": "projeto",
+    "name": "mapa_saude",
     "slug": "projeto",
-    "version": "1.0.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
