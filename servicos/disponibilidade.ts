@@ -1,5 +1,6 @@
 import type { DayName, OpeningHours } from '../dominio/interfaces';
 
+// Serviço para verificar a disponibilidade de uma localização com base em seu horário de funcionamento
 export class AvailabilityService {
   private readonly dayNames: DayName[] = [
     'sunday',

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Modal, Pressable, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, ActivityIndicator, Modal, Pressable, StatusBar as NativeStatusBar } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewMessageEvent, WebViewSource } from 'react-native-webview/lib/WebViewTypes';
 import * as Location from 'expo-location';
@@ -10,6 +10,7 @@ import { locations } from '../dados/locations';
 import type { Coordinates, Location as LocationData, NavigationApp } from '../dominio/interfaces';
 import { AvailabilityService } from '../servicos/disponibilidade';
 import { AppNavigationService } from '../servicos/navegacao';
+import { styles } from './mapa.styles';
 
 // Troca de mensagens entre o mapa e o app
 type MapMessage =
@@ -60,12 +61,12 @@ export default function MapScreen() {
   const getAvailability = (openingHours: LocationData['openingHours']): string =>
     availabilityService.getStatus(openingHours);
 
-  // Função para abrir o aplicativo de navegação escolhido com a rota para o ponto selecionado.
+  // Função para abrir o aplicativo de navegação escolhido (Google Maps, Waze ou Uber) com a rota para o ponto selecionado.
   const openNavigationApp = async (app: NavigationApp): Promise<void> => {
     if (!selectedPin) {
       return;
     }
-
+    // Verifica se a localização atual do usuário está disponível antes de abrir o aplicativo de navegação.
     try {
       await navigationService.openRoute(app, selectedPin, location);
       setRouteOptionsVisible(false);
@@ -125,6 +126,7 @@ export default function MapScreen() {
     let cancelled = false;
 
     (async () => {
+      // Pede a localização ao usuário e manda mensagem de erro caso ele negue
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
@@ -133,7 +135,7 @@ export default function MapScreen() {
           }
           return;
         }
-
+        // checa e a localização está ativada
         const servicesEnabled = await Location.hasServicesEnabledAsync();
         if (!servicesEnabled) {
           if (!cancelled) {
@@ -141,13 +143,15 @@ export default function MapScreen() {
           }
           return;
         }
-
+        // timeout pra previnir carregamento infinito
         const timeout: Promise<never> = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('LOCATION_TIMEOUT')), 15000);
         });
+        // pega a localização atual do usuário com alta precisão
         const position = Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
+        // espera a primeira promessa que resolver, seja a localização ou o timeout
         const pos = await Promise.race([position, timeout]);
 
         if (!cancelled) {
@@ -174,13 +178,14 @@ export default function MapScreen() {
     };
   }, []);
 
-  // Manda a localização pro mapa assim que ELE avisar que carregou
+  // Manda a localização pro mapa assim que ele estiver pronto
   useEffect(() => {
     if (location && mapReady) {
       sendLocationToMap();
     }
   }, [location, mapReady]);
 
+  // Manda os pins pro mapa assim que ele estiver pronto
   useEffect(() => {
     if (mapReady) {
       webviewRef.current?.postMessage(JSON.stringify({
@@ -202,46 +207,49 @@ export default function MapScreen() {
     });
     webviewRef.current?.postMessage(msg);
   };
-
+  // tratamento de inputs do usuário no mapa
   const handleWebViewMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data) as MapMessage;
-      if (data.type === 'MAP_READY') {
-        setMapReady(true);
-      }
-      if (data.type === 'MAP_CLICK') {
-        console.log('Clicou em:', data.lat, data.long);
-      }
-      if (data.type === 'PIN_CLICK') {
-        const location = locations.find(item => item.id === data.pin.id);
-        if (location) {
-          setSelectedPin(location);
+      switch (data.type) {
+        case 'MAP_READY':
+          setMapReady(true);
+          break;
+        case 'MAP_CLICK':
+          console.log('Clicou em:', data.lat, data.long);
+          break;
+        case 'PIN_CLICK': {
+          const location = locations.find(item => item.id === data.pin.id);
+          if (location) {
+            setSelectedPin(location);
+          }
+          break;
         }
       }
     } catch (error) {
       console.warn('Erro ao processar mensagem do mapa:', error);
     }
   };
-
+  // tratamento de erros do mapa
   const handleMapError = (event: WebViewErrorEvent) => {
     const description = event.nativeEvent.description || 'Não foi possível carregar o mapa.';
     console.warn('Erro ao carregar o mapa:', description);
     setMapError('Não foi possível carregar o mapa. Verifique sua conexão com a internet.');
   };
-
+  // tratamento de erros HTTP do mapa
   const handleMapHttpError = (event: WebViewHttpErrorEvent) => {
     const { statusCode, description } = event.nativeEvent;
     console.warn(`Erro HTTP do mapa (${statusCode}):`, description);
     setMapError(`O mapa retornou um erro de rede (${statusCode}). Verifique sua conexão.`);
   };
-
+  // recarregar o mapa
   const reloadMap = () => {
     setMapError(null);
     setMapReady(false);
     webviewRef.current?.reload();
   };
 
-  // mensagem de carregamento
+  // renderiza a tela de carregamento
   if (loading) {
     return (
       <View style={styles.screen}>
@@ -265,11 +273,12 @@ export default function MapScreen() {
     );
   }
 
-  // ver o mapa, basicamente
+  // carrega o mapa, basicamente
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
       <View style={styles.mapContainer}>
+        {/*child de carregamento do mapa */}
         <WebView
           ref={webviewRef}
           originWhitelist={['*']}
@@ -283,7 +292,7 @@ export default function MapScreen() {
           domStorageEnabled={true}
           androidLayerType="software"
         />
-
+        {/* overlay de erro do mapa */}
         {mapError && (
           <View style={styles.mapErrorOverlay}>
             <Text style={styles.mapErrorText}>{mapError}</Text>
@@ -292,7 +301,7 @@ export default function MapScreen() {
             </Pressable>
           </View>
         )}
-
+        {/* overlay de detalhes do pin selecionado */}
         {selectedPin && (
           <View style={styles.detailsOverlay}>
             <Text selectable style={styles.detailsTitle}>{selectedPin.title}</Text>
@@ -330,7 +339,7 @@ export default function MapScreen() {
           </View>
         )}
       </View>
-
+      {/* modal de opções de rota */ }
       <Modal
         visible={routeOptionsVisible}
         transparent
@@ -370,138 +379,3 @@ export default function MapScreen() {
     </View>
   );
 }
-
-// coisas de style pra ficar no meio
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#1976D2',
-    paddingTop: NativeStatusBar.currentHeight || 0,
-  },
-  mapContainer: { flex: 1 },
-  webview: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  mapErrorOverlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#F5F7FA',
-  },
-  mapErrorText: {
-    color: '#243B53',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  reloadButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 6,
-    backgroundColor: '#1976D2',
-  },
-  reloadButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  loadingText: { color: '#FFFFFF' },
-  detailsOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#F5F7FA',
-    padding: 24,
-  },
-  detailsTitle: {
-    color: '#172B4D',
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  detailsType: {
-    color: '#1976D2',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 28,
-  },
-  detailsSection: {
-    paddingVertical: 18,
-    borderTopWidth: 1,
-    borderTopColor: '#D9E2EC',
-  },
-  detailsLabel: {
-    color: '#52606D',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  detailsValue: {
-    color: '#243B53',
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 6,
-    backgroundColor: '#1976D2',
-  },
-  backButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  routeButton: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 6,
-    backgroundColor: '#2E7D32',
-  },
-  routeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  routeModalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-  },
-  routeModalCard: {
-    padding: 20,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  routeModalTitle: {
-    color: '#172B4D',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  routeOption: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D9E2EC',
-  },
-  routeOptionText: {
-    color: '#1976D2',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelOption: {
-    alignSelf: 'flex-end',
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  cancelOptionText: {
-    color: '#52606D',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-});

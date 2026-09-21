@@ -3,12 +3,12 @@ import type { Location } from '../dominio/interfaces';
 /*
 Template de uma localização com os dados usados pelo projeto:
 {
-  id: 'ubs-0',
+    id: 'ubs-0',
     lat: -20.0000000,
     long: -40.0000000,
-  title: 'Nome da unidade',
+    title: 'Nome da unidade',
     phone: '(27) 0000-0000',
-  address: {
+    address: {
     street: 'Nome da rua',
     number: '100',
     neighborhood: 'Nome do bairro',
@@ -28,6 +28,7 @@ Template de uma localização com os dados usados pelo projeto:
 },
 */
 
+// Lista de localizações 
 export const locations: Location[] = [
     {
         id: 'upa-1',

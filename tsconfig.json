@@ -1,3 +1,4 @@
+// config do TypeScript pro Expo
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
