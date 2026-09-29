@@ -7,9 +7,9 @@ import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import { StatusBar } from 'expo-status-bar';
 import mapHtml from '../assets/map.html';
-import { locations } from '../dados/locations';
 import type { Coordinates, Location as LocationData, NavigationApp } from '../dominio/interfaces';
 import { AvailabilityService } from '../servicos/disponibilidade';
+import { HealthServiceNockImp } from '../servicos/healthServiceNockImp';
 import { AppNavigationService } from '../servicos/navegacao';
 import { styles } from './mapa.styles';
 
@@ -21,6 +21,7 @@ type MapMessage =
 
 // Serviços de verificação de disponibilidade e navegação(escolha de rotas)
 const availabilityService = new AvailabilityService();
+const healthService = new HealthServiceNockImp();
 const navigationService = new AppNavigationService();
 
 // Tela do mapa
@@ -31,6 +32,7 @@ export default function MapScreen() {
   // Referência para controlar o WebView do mapa e enviar mensagens para o HTML embutido.
   const webviewRef = useRef<WebView>(null);
   // Lista de pontos do mapa exibidos no leaflet/HTML do mapa.
+  const [locations, setLocations] = useState<LocationData[]>([]);
   const pins = locations;
   // Coordenadas da localização atual do usuário em latitude/longitude.
   const [location, setLocation] = useState<Coordinates | null>(null);
@@ -57,6 +59,24 @@ export default function MapScreen() {
   const [routeOptionsVisible, setRouteOptionsVisible] = useState(false);
 
   // ======================================================================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    healthService.getLocations()
+      .then(result => {
+        if (!cancelled) {
+          setLocations(result);
+        }
+      })
+      .catch(error => {
+        console.warn('Não foi possível carregar as unidades de saúde:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Função para obter a disponibilidade de um ponto com base em seus horários de funcionamento.
   const getAvailability = (openingHours: LocationData['openingHours']): string =>
@@ -190,7 +210,7 @@ export default function MapScreen() {
         pins,
       }));
     }
-  }, [mapReady]);
+  }, [mapReady, pins]);
 
   const sendLocationToMap = () => {
     if (!location) {

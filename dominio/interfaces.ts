@@ -55,3 +55,7 @@ export interface NavigationService {
     origin?: Coordinates | null,
   ): Promise<void>;
 }
+
+export interface IHealthService {
+  getLocations(): Promise<Location[]>;
+}
