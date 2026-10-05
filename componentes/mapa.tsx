@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator, Modal, Pressable, StatusBar as NativeStatusBar } from 'react-native';
+import { View, Text, ActivityIndicator, Modal, Pressable, StatusBar as NativeStatusBar, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewMessageEvent, WebViewSource } from 'react-native-webview/lib/WebViewTypes';
 import * as Location from 'expo-location';
@@ -12,6 +12,7 @@ import { AvailabilityService } from '../servicos/disponibilidade';
 import { HealthServiceNockImp } from '../servicos/healthServiceNockImp';
 import { AppNavigationService } from '../servicos/navegacao';
 import { styles } from './mapa.styles';
+
 
 // Troca de mensagens entre o mapa e o app
 type MapMessage =
@@ -60,6 +61,21 @@ export default function MapScreen() {
 
   // ======================================================================================
 
+  // deve fazer algo quando o usuário apertar o botão de voltar do Android, se um pin estiver selecionado
+  useEffect(() => {
+    if (!selectedPin) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedPin(null);
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [selectedPin]);
+
+  // checador de erros
   useEffect(() => {
     let cancelled = false;
 
