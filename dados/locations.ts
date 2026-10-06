@@ -30,22 +30,22 @@ Template de uma localização com os dados usados pelo projeto:
 
 // Lista de localizações 
 export const locations: Location[] = [
-    {
-        id: 'upa-1',
-        lat: -20.2845915,
-        long: -40.3324031,
-        title: 'Pronto Atendimento de São Pedro',
-        phone: '(27) 3132-4930',
-        address: {
-            street: 'Rodovia Serafim Derenzi',
-            number: '4489',
-            neighborhood: 'Nome do bairro',
-            city: 'Vitória',
-            state: 'ES',
-            zipCode: '29031-847',
+        {
+            id: 'upa-1',
+            lat: -20.2845915,
+            long: -40.3324031,
+            title: 'Pronto Atendimento de São Pedro',
+            phone: '(27) 3132-4930',
+            address: {
+                street: 'Rodovia Serafim Derenzi',
+                number: '4489',
+                neighborhood: 'Nome do bairro',
+                city: 'Vitória',
+                state: 'ES',
+                zipCode: '29031-847',
+            },
+            openingHours: '24/7',
         },
-        openingHours: '24/7',
-    },
     {
         id: 'upa-2',
         lat: -20.3145658,
