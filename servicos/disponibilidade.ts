@@ -22,6 +22,10 @@ export class AvailabilityService {
       return 'Fechado hoje';
     }
 
+    if (todayHours.open === null || todayHours.close === null) {
+      return 'Fechado hoje';
+    }
+
     const currentMinutes = date.getHours() * 60 + date.getMinutes();
     const openingMinutes = this.toMinutes(todayHours.open);
     const closingMinutes = this.toMinutes(todayHours.close);

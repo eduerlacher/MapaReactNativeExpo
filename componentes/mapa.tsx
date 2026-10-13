@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import mapHtml from '../assets/map.html';
 import type { Coordinates, Location as LocationData, NavigationApp } from '../dominio/interfaces';
 import { AvailabilityService } from '../servicos/disponibilidade';
-import { HealthServiceNockImp } from '../servicos/healthServiceNockImp';
+import { HealthServiceApiImp } from '../servicos/healthServiceApiImp';
 import { AppNavigationService } from '../servicos/navegacao';
 import { styles } from './mapa.styles';
 
@@ -22,7 +22,7 @@ type MapMessage =
 
 // Serviços de verificação de disponibilidade e navegação(escolha de rotas)
 const availabilityService = new AvailabilityService();
-const healthService = new HealthServiceNockImp();
+const healthService = new HealthServiceApiImp();
 const navigationService = new AppNavigationService();
 
 // Tela do mapa
@@ -34,6 +34,9 @@ export default function MapScreen() {
   const webviewRef = useRef<WebView>(null);
   // Lista de pontos do mapa exibidos no leaflet/HTML do mapa.
   const [locations, setLocations] = useState<LocationData[]>([]);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsFetchAttempt, setLocationsFetchAttempt] = useState(0);
   const pins = locations;
   // Coordenadas da localização atual do usuário em latitude/longitude.
   const [location, setLocation] = useState<Coordinates | null>(null);
@@ -78,6 +81,8 @@ export default function MapScreen() {
   // checador de erros
   useEffect(() => {
     let cancelled = false;
+    setLocationsLoading(true);
+    setLocationsError(null);
 
     healthService.getLocations()
       .then(result => {
@@ -86,13 +91,23 @@ export default function MapScreen() {
         }
       })
       .catch(error => {
-        console.warn('Não foi possível carregar as unidades de saúde:', error);
+        if (!cancelled) {
+          console.warn('Não foi possível carregar as unidades de saúde:', error);
+          setLocationsError(
+            error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLocationsLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locationsFetchAttempt]);
 
   // Função para obter a disponibilidade de um ponto com base em seus horários de funcionamento.
   const getAvailability = (openingHours: LocationData['openingHours']): string =>
@@ -325,6 +340,25 @@ export default function MapScreen() {
           domStorageEnabled={true}
           androidLayerType="software"
         />
+        {!mapError && locationsLoading && locations.length === 0 && (
+          <View style={styles.mapErrorOverlay}>
+            <ActivityIndicator size="large" />
+            <Text style={styles.mapErrorText}>Carregando unidades de saúde...</Text>
+          </View>
+        )}
+        {!mapError && locationsError && locations.length === 0 && (
+          <View style={styles.mapErrorOverlay}>
+            <Text style={styles.mapErrorText}>
+              Não foi possível carregar as unidades de saúde: {locationsError}
+            </Text>
+            <Pressable
+              style={styles.reloadButton}
+              onPress={() => setLocationsFetchAttempt(attempt => attempt + 1)}
+            >
+              <Text style={styles.reloadButtonText}>Tentar novamente</Text>
+            </Pressable>
+          </View>
+        )}
         {/* overlay de erro do mapa */}
         {mapError && (
           <View style={styles.mapErrorOverlay}>

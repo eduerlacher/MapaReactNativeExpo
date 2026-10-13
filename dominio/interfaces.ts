@@ -6,16 +6,17 @@ export interface Coordinates {
   long: number;
 }
 
-// Interface de abertura/fechamento
+// Horários de um dia; valores nulos indicam que aquele horário não foi informado.
 export interface OpeningHoursDay {
-  open: string;
-  close: string;
+  open: string | null;
+  close: string | null;
 }
 
-// Interface para abertura 24/7
+// A API retorna "24/7" para unidades com atendimento contínuo. Para as demais,
+// retorna os horários por dia da semana; o dia ou seus horários podem ser nulos.
 export type OpeningHours = '24/7' | Record<DayName, OpeningHoursDay | null>;
 
-// Tipos de dias da semana
+// Os nomes seguem as chaves em inglês usadas no objeto openingHours da API.
 export type DayName =
   | 'monday'
   | 'tuesday'
@@ -56,6 +57,7 @@ export interface NavigationService {
   ): Promise<void>;
 }
 
+// Contrato para obter as unidades de saúde, independentemente da fonte dos dados.
 export interface IHealthService {
   getLocations(): Promise<Location[]>;
 }
